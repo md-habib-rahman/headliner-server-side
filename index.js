@@ -1,6 +1,6 @@
 const express = require("express");
 const cors = require("cors");
-const { MongoClient, ServerApiVersion } = require("mongodb");
+const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
 require("dotenv").config();
 
 const app = express();
@@ -26,7 +26,40 @@ app.get("/", (req, res) => {
 async function run() {
   try {
     await client.connect();
-    const db = client.db("headlinerDB");
+    const usersCollection = client
+      .db("headLinerDB")
+      .collection("userCollections");
+
+    //adding new user to db
+    app.post("/users", async (req, res) => {
+      const email = req.body.email;
+      const existingUser = await usersCollection.findOne({ email });
+      if (existingUser) {
+        return res.status(200).send({ message: "User allready exist" });
+      }
+      const user = req.body;
+      const result = await usersCollection.insertOne(user);
+      if (result) {
+        res.status(200).send({ success: true });
+      }
+    });
+
+    app.get("/user/role/:email", async (req, res) => {
+      const email = req.params.email;
+      const user = await usersCollection.findOne({ email });
+      if (!user) {
+        return res.status(404).send({ message: "User Not Found!" });
+      }
+      res.send({ role: user.role || "user" });
+    });
+
+    app.get("/users/:email", async (req, res) => {
+      const email = req.params.email;
+      const user = await usersCollection.findOne({ email: email });
+      if (user) {
+        res.status(200).send(user);
+      }
+    });
 
     await client.db("headLinerDB").command({ ping: 1 });
     console.log(
