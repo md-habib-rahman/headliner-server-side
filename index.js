@@ -68,6 +68,15 @@ async function run() {
         res.status(200).send({ success: true });
       }
     });
+
+    //get articles api
+    app.get("/articles", async (req, res) => {
+      const result = await articleCollection.find({}).toArray();
+      if (result) {
+        res.status(200).send(result);
+      }
+    });
+	
     //add article api
     app.post("/articles", async (req, res) => {
       const newArticle = ({
