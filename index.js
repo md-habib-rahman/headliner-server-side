@@ -40,13 +40,27 @@ async function run() {
         res.status(200).send(users);
       }
     });
-	
+
+    //update user role
+    app.patch("/users/role/:email", async (req, res) => {
+      const { email } = req.params;
+      const { role } = req.body;
+      const result = await usersCollection.updateOne(
+        { email: email },
+        { $set: { role } }
+      );
+      if (result.matchedCount === 0) {
+        return res.status(404).json({ success: false });
+      }
+      res.status(200).send({ success: true });
+    });
+
     //adding new user to db
     app.post("/users", async (req, res) => {
       const email = req.body.email;
       const existingUser = await usersCollection.findOne({ email });
       if (existingUser) {
-        return res.status(200).send({ message: "User allready exist" });
+        return res.status(200).send({ success: false });
       }
       const user = req.body;
       const result = await usersCollection.insertOne(user);
