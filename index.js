@@ -29,7 +29,18 @@ async function run() {
     const usersCollection = client
       .db("headLinerDB")
       .collection("userCollections");
+    const articleCollection = client
+      .db("headLinerDB")
+      .collection("articleCollection");
 
+    //all users api
+    app.get("/users", async (req, res) => {
+      const users = await usersCollection.find({}).toArray();
+      if (users) {
+        res.status(200).send(users);
+      }
+    });
+	
     //adding new user to db
     app.post("/users", async (req, res) => {
       const email = req.body.email;
@@ -39,6 +50,25 @@ async function run() {
       }
       const user = req.body;
       const result = await usersCollection.insertOne(user);
+      if (result) {
+        res.status(200).send({ success: true });
+      }
+    });
+    //add article api
+    app.post("/articles", async (req, res) => {
+      const newArticle = ({
+        title,
+        description,
+        publisher,
+        tags,
+        imageUrl,
+        isApprove,
+        isPremium,
+        createdBy,
+        createdAt,
+      } = req.body);
+
+      const result = await articleCollection.insertOne(newArticle);
       if (result) {
         res.status(200).send({ success: true });
       }
