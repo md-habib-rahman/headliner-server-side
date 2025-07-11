@@ -26,12 +26,17 @@ app.get("/", (req, res) => {
 async function run() {
   try {
     await client.connect();
+
+    //collections
     const usersCollection = client
       .db("headLinerDB")
       .collection("userCollections");
     const articleCollection = client
       .db("headLinerDB")
       .collection("articleCollection");
+    const publisherCollection = client
+      .db("headLinerDB")
+      .collection("publisherCollection");
 
     //all users api
     app.get("/users", async (req, res) => {
@@ -69,14 +74,29 @@ async function run() {
       }
     });
 
-    //get articles api
-    app.get("/articles", async (req, res) => {
-      const result = await articleCollection.find({}).toArray();
+    //get articles with user joined api
+    app.get("/articles-with-users", async (req, res) => {
+      const result = await articleCollection
+        .aggregate([
+          {
+            $lookup: {
+              from: "userCollections",
+              localField: "createdBy",
+              foreignField: "email",
+              as: "articleWithUserInfo",
+            },
+          },
+          {
+            $unwind: "$articleWithUserInfo",
+          },
+        ])
+        .toArray();
+      console.dir(result);
       if (result) {
         res.status(200).send(result);
       }
     });
-	
+
     //add article api
     app.post("/articles", async (req, res) => {
       const newArticle = ({
@@ -93,6 +113,65 @@ async function run() {
 
       const result = await articleCollection.insertOne(newArticle);
       if (result) {
+        res.status(200).send({ success: true });
+      }
+    });
+
+    //add publisher
+    app.post("/publishers", async (req, res) => {
+      const newPublisher = req.body;
+      const result = await publisherCollection.insertOne(newPublisher);
+      if (result) {
+        res.status(200).send({ success: true });
+      }
+    });
+
+    //get publisher
+    app.get("/publishers", async (req, res) => {
+      const result = await publisherCollection.find({}).toArray();
+      if (result) {
+        res.status(200).send(result);
+      }
+    });
+
+    //edit publisher
+    app.put("/publishers/:pub_id", async (req, res) => {
+      const pub_id = req.params.pub_id;
+      const { name, image } = req.body;
+      const result = await publisherCollection.updateOne(
+        {
+          _id: new ObjectId(pub_id),
+        },
+        {
+          $set: {
+            name,
+            image,
+          },
+        }
+      );
+      if (result) {
+        res.status(200).send({ success: true });
+      }
+    });
+
+    //delete publisher api
+    app.delete("/publishers/:id", async (req, res) => {
+      const id = req.params.id;
+      const result = await publisherCollection.deleteOne({
+        _id: new ObjectId(id),
+      });
+      if (result) {
+        res.status(200).send({ success: true });
+      }
+    });
+
+    //delete article api
+    app.delete("/article/:id", async (req, res) => {
+      const { id } = req.params;
+      const result = await articleCollection.deleteOne({
+        _id: new ObjectId(id),
+      });
+      if (result.deletedCount === 1) {
         res.status(200).send({ success: true });
       }
     });
