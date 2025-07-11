@@ -91,7 +91,7 @@ async function run() {
           },
         ])
         .toArray();
-      console.dir(result);
+      //   console.dir(result);
       if (result) {
         res.status(200).send(result);
       }
@@ -129,9 +129,43 @@ async function run() {
     //get publisher
     app.get("/publishers", async (req, res) => {
       const result = await publisherCollection.find({}).toArray();
+
       if (result) {
         res.status(200).send(result);
       }
+    });
+
+    //update article approval status
+    app.patch("/article/allow-approval/:id", async (req, res) => {
+      const { id } = req.params;
+      const result = await articleCollection.updateOne(
+        { _id: new ObjectId(id) },
+        {
+          $set: {
+            "approvalStatus[0].isApprove": true,
+          },
+        }
+      );
+      if (result.upsertedCount === 1) {
+        res.status(200).send({ success: true });
+      }
+    });
+
+    //update decline message
+    app.patch("/article/decline/:id", async (req, res) => {
+      const { id } = req.params;
+      const { declineMessage } = req.body;
+
+      const result = await articleCollection.updateOne(
+        { _id: new ObjectId(id) },
+        {
+          $set: {
+            "approvalStatus[1].isDecline": true,
+            "approvalStatus[2].declineMessage": declineMessage,
+          },
+        }
+      );
+      res.send({ success: true });
     });
 
     //edit publisher
@@ -160,7 +194,7 @@ async function run() {
       const result = await publisherCollection.deleteOne({
         _id: new ObjectId(id),
       });
-      if (result) {
+      if (result.deletedCount === 1) {
         res.status(200).send({ success: true });
       }
     });
