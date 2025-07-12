@@ -151,6 +151,17 @@ async function run() {
       }
     });
 
+    //myArticle fetch api
+    app.get("/article/my-articles", async (req, res) => {
+      const { email } = req.query;
+      const result = await articleCollection
+        .find({ createdBy: email })
+        .toArray();
+      if (result) {
+        res.status(200).send(result);
+      }
+    });
+
     //update decline message
     app.patch("/article/decline/:id", async (req, res) => {
       const { id } = req.params;
