@@ -142,12 +142,13 @@ async function run() {
         { _id: new ObjectId(id) },
         {
           $set: {
-            "approvalStatus[0].isApprove": true,
+            "approvalStatus.isApprove": true,
           },
         }
       );
-      if (result.upsertedCount === 1) {
-        res.status(200).send({ success: true });
+      //   console.log(result)
+      if (result) {
+        res.send(result);
       }
     });
 
@@ -162,6 +163,60 @@ async function run() {
       }
     });
 
+    //article details api
+    app.get("/article-details/:id", async (req, res) => {
+      const { id } = req.params;
+      const result = await articleCollection.findOne({ _id: new ObjectId(id) });
+      res.send(result);
+    });
+
+    //update article api
+    app.put("/update-article/:id", async (req, res) => {
+      const { id } = req.params;
+      const { title, description, publisher, tags, imageUrl } = req.body;
+
+      const result = await articleCollection.updateOne(
+        { _id: new ObjectId(id) },
+        {
+          $set: { title, description, publisher, tags, imageUrl },
+        }
+      );
+      res.send(result);
+    });
+
+    //all article fetch api with title search, publisher, tags in query
+    app.get("/articles/all", async (req, res) => {
+      const { publisher, tags, search } = req.query;
+
+      const filters = { "approvalStatus.isApprove": true };
+
+      if (publisher) {
+        filters.publisher = publisher;
+      }
+      console.log(tags);
+
+      if (tags) {
+        filters.tags = tags;
+      }
+
+      if (search) {
+        filters.title = { $regex: search, $options: "i" };
+      }
+
+      const articles = await articleCollection.find(filters).toArray();
+      res.status(200).send(articles);
+    });
+
+    //make premium api
+    app.patch("/make-premium/:id", async (req, res) => {
+      const id = req.params;
+      const result = await articleCollection.updateOne(
+        { _id: new ObjectId(id) },
+        { $set: { isPremium: true } }
+      );
+      res.send(result);
+    });
+
     //update decline message
     app.patch("/article/decline/:id", async (req, res) => {
       const { id } = req.params;
@@ -171,12 +226,12 @@ async function run() {
         { _id: new ObjectId(id) },
         {
           $set: {
-            "approvalStatus[1].isDecline": true,
-            "approvalStatus[2].declineMessage": declineMessage,
+            "approvalStatus.isDecline": true,
+            "approvalStatus.declineMessage": declineMessage,
           },
         }
       );
-      res.send({ success: true });
+      res.send(result);
     });
 
     //edit publisher
@@ -210,6 +265,17 @@ async function run() {
       }
     });
 
+    //myarticle delete api
+    app.delete("/my-articles/delete/:id", async (req, res) => {
+      const { id } = req.params;
+      const result = await articleCollection.deleteOne({
+        _id: new ObjectId(id),
+      });
+      if (result.deletedCount === 1) {
+        res.status(200).send({ success: true });
+      }
+    });
+
     //delete article api
     app.delete("/article/:id", async (req, res) => {
       const { id } = req.params;
@@ -221,6 +287,7 @@ async function run() {
       }
     });
 
+    //user role api
     app.get("/user/role/:email", async (req, res) => {
       const email = req.params.email;
       const user = await usersCollection.findOne({ email });
@@ -230,6 +297,7 @@ async function run() {
       res.send({ role: user.role || "user" });
     });
 
+    //find user with email api
     app.get("/users/:email", async (req, res) => {
       const email = req.params.email;
       const user = await usersCollection.findOne({ email: email });
