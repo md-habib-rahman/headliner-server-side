@@ -217,6 +217,18 @@ async function run() {
       res.send(result);
     });
 
+    //update article view count
+    app.patch("/article/update-view/:id", async (req, res) => {
+      const { id } = req.params;
+      const result = await articleCollection.updateOne(
+        { _id: new ObjectId(id) },
+        { $inc: { viewCount: 1 } }
+      );
+      if (result) {
+        res.status(200).send(result);
+      }
+    });
+
     //update decline message
     app.patch("/article/decline/:id", async (req, res) => {
       const { id } = req.params;
