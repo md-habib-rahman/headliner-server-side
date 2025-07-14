@@ -1,6 +1,7 @@
 const express = require("express");
 const cors = require("cors");
 const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
+const { useInRouterContext } = require("react-router");
 require("dotenv").config();
 
 const app = express();
@@ -99,6 +100,22 @@ async function run() {
 
     //add article api
     app.post("/articles", async (req, res) => {
+      const { createdBy } = req.body;
+
+      const existingArticles = await articleCollection
+        .find({ createdBy })
+        .toArray();
+
+      const user = await usersCollection.findOne({ email: createdBy });
+
+      if (!user.premiumTaken && existingArticles.length >= 1) {
+        return res.send({
+          success: false,
+          code: 4099,
+          message: "data not inserted",
+        });
+      }
+
       const newArticle = ({
         title,
         description,
