@@ -3,6 +3,7 @@ const cors = require("cors");
 const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
 const { useInRouterContext } = require("react-router");
 require("dotenv").config();
+const stripe = require("stripe")(process.env.STRIPE_SECRET);
 
 const app = express();
 const port = process.env.PORT || 5000;
@@ -143,6 +144,23 @@ async function run() {
       }
     });
 
+    //user subscription activation api
+    app.patch("/user/active-subscription/:email", async (req, res) => {
+      const { email } = req.params;
+      const { premiumTaken, subscriptionDuration } = req.body;
+      //   console.log(email, premiumTaken, subscriptionDuration);
+      const result = await usersCollection.updateOne(
+        { email: email },
+        {
+          $set: {
+            premiumTaken: premiumTaken,
+            subscriptionDuration: subscriptionDuration,
+          },
+        }
+      );
+      res.send(result);
+    });
+
     //get publisher
     app.get("/publishers", async (req, res) => {
       const result = await publisherCollection.find({}).toArray();
@@ -201,17 +219,14 @@ async function run() {
       res.send(result);
     });
 
-    //all article fetch api with title search, publisher, tags in query
+    //all article fetch/filter api with title search, publisher, tags in query
     app.get("/articles/all", async (req, res) => {
       const { publisher, tags, search } = req.query;
-
       const filters = { "approvalStatus.isApprove": true };
-
       if (publisher) {
         filters.publisher = publisher;
       }
-      console.log(tags);
-
+      //   console.log(tags);
       if (tags) {
         filters.tags = tags;
       }
@@ -219,12 +234,11 @@ async function run() {
       if (search) {
         filters.title = { $regex: search, $options: "i" };
       }
-
       const articles = await articleCollection.find(filters).toArray();
       res.status(200).send(articles);
     });
 
-    //make premium api
+    //make article premium api
     app.patch("/make-premium/:id", async (req, res) => {
       const id = req.params;
       const result = await articleCollection.updateOne(
@@ -320,10 +334,24 @@ async function run() {
     app.get("/user/role/:email", async (req, res) => {
       const email = req.params.email;
       const user = await usersCollection.findOne({ email });
+      console.log(user);
       if (!user) {
         return res.status(404).send({ message: "User Not Found!" });
       }
+      if (user.premiumTaken) {
+        return res.send({ role: "premium" });
+      }
       res.send({ role: user.role || "user" });
+    });
+
+    //fetch premium articles api
+    app.get("/articles/premium", async (req, res) => {
+      const { isPremium } = req.query;
+
+      const query = { isPremium: true, "approvalStatus.isApprove": true };
+
+      const articles = await articleCollection.find(query).toArray();
+      res.status(200).send(articles);
     });
 
     //find user with email api
@@ -332,6 +360,31 @@ async function run() {
       const user = await usersCollection.findOne({ email: email });
       if (user) {
         res.status(200).send(user);
+      }
+    });
+
+    //stripe payment intent
+    app.post("/create-payment-intent", async (req, res) => {
+      try {
+        // Extract information from request body
+        const { amountInCents } = req.body;
+
+        // Create the PaymentIntent
+        const paymentIntent = await stripe.paymentIntents.create({
+          amount: amountInCents, // Amount in cents (e.g., 1000 = $10.00)
+          currency: "usd",
+
+          payment_method_types: ["card"],
+        });
+
+        // Send the client secret to the client
+        res.send({
+          clientSecret: paymentIntent.client_secret,
+          id: paymentIntent.id,
+        });
+      } catch (error) {
+        console.error("Error creating payment intent:", error);
+        res.status(500).send({ error: error.message });
       }
     });
 
