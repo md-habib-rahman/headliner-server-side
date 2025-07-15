@@ -116,23 +116,43 @@ async function run() {
           message: "data not inserted",
         });
       }
+      console.log(req.body);
+      //   const newsArticle = ({
+      //     title,
+      // 	tickerText,
+      //     description,
+      //     publisher,
+      //     tags,
+      //     imageUrl,
+      //     isApprove,
+      //     isPremium,
+      //     createdBy,
+      //     createdAt,
+      //   } = req.body);
 
-      const newArticle = ({
-        title,
-        description,
-        publisher,
-        tags,
-        imageUrl,
-        isApprove,
-        isPremium,
-        createdBy,
-        createdAt,
-      } = req.body);
+      const newsArticle = req.body;
 
-      const result = await articleCollection.insertOne(newArticle);
+      const result = await articleCollection.insertOne(newsArticle);
       if (result) {
+        console.log(result);
         res.status(200).send({ success: true });
       }
+    });
+
+    //fetch ticker text
+    app.get("/news/tickers", async (req, res) => {
+      const approvedArticles = await articleCollection
+        .find(
+          { "approvalStatus.isApprove": true },
+          { projection: { tickerText: 1 } }
+        )
+        .toArray();
+
+      const tickerTexts = approvedArticles
+        .map((article) => article.tickerText)
+        .filter(Boolean); // filter out any null or undefined values
+
+      res.status(200).send(tickerTexts);
     });
 
     //add publisher
@@ -350,7 +370,7 @@ async function run() {
       const premiumUsers = await usersCollection.countDocuments({
         premiumTaken: { $ne: null },
       });
-      const normalUsers  = await usersCollection.countDocuments({
+      const normalUsers = await usersCollection.countDocuments({
         premiumTaken: null,
       });
 
