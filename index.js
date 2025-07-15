@@ -334,7 +334,7 @@ async function run() {
     app.get("/user/role/:email", async (req, res) => {
       const email = req.params.email;
       const user = await usersCollection.findOne({ email });
-      console.log(user);
+      //   console.log(user);
       if (!user) {
         return res.status(404).send({ message: "User Not Found!" });
       }
@@ -342,6 +342,30 @@ async function run() {
         return res.send({ role: "premium" });
       }
       res.send({ role: user.role || "user" });
+    });
+
+    //fetch user count
+    app.get("/stats", async (req, res) => {
+      const totalUsers = await usersCollection.countDocuments();
+      const premiumUsers = await usersCollection.countDocuments({
+        premiumTaken: { $ne: null },
+      });
+      const normalUsers  = await usersCollection.countDocuments({
+        premiumTaken: null,
+      });
+
+      const allArticles = await articleCollection.countDocuments();
+      const premiumArticles = await articleCollection.countDocuments({
+        isPremium: true,
+      });
+
+      res.status(200).send({
+        premiumArticles,
+        allArticles,
+        totalUsers,
+        normalUsers,
+        premiumUsers,
+      });
     });
 
     //fetch premium articles api
@@ -354,14 +378,20 @@ async function run() {
       res.status(200).send(articles);
     });
 
+    //fetch publisher api
+    app.get("/publishers", async (req, res) => {
+      const publishers = await publisherCollection.find().toArray();
+      res.status(200).send(publishers);
+    });
+
     //treding article fetch api
     app.get("/articles/trending", async (req, res) => {
       const trendingArticles = await articleCollection
-          .find({ "approvalStatus.isApprove": true }) 
-          .sort({ viewCount: -1 }) 
-          .limit(6) 
-          .toArray();
-        res.status(200).send(trendingArticles);
+        .find({ "approvalStatus.isApprove": true })
+        .sort({ viewCount: -1 })
+        .limit(6)
+        .toArray();
+      res.status(200).send(trendingArticles);
     });
 
     //find user with email api
@@ -376,18 +406,15 @@ async function run() {
     //stripe payment intent
     app.post("/create-payment-intent", async (req, res) => {
       try {
-        // Extract information from request body
         const { amountInCents } = req.body;
 
-        // Create the PaymentIntent
         const paymentIntent = await stripe.paymentIntents.create({
-          amount: amountInCents, // Amount in cents (e.g., 1000 = $10.00)
+          amount: amountInCents,
           currency: "usd",
 
           payment_method_types: ["card"],
         });
 
-        // Send the client secret to the client
         res.send({
           clientSecret: paymentIntent.client_secret,
           id: paymentIntent.id,
