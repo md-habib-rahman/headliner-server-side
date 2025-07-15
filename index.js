@@ -354,6 +354,16 @@ async function run() {
       res.status(200).send(articles);
     });
 
+    //treding article fetch api
+    app.get("/articles/trending", async (req, res) => {
+      const trendingArticles = await articleCollection
+          .find({ "approvalStatus.isApprove": true }) 
+          .sort({ viewCount: -1 }) 
+          .limit(6) 
+          .toArray();
+        res.status(200).send(trendingArticles);
+    });
+
     //find user with email api
     app.get("/users/:email", async (req, res) => {
       const email = req.params.email;
