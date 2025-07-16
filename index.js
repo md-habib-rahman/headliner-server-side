@@ -164,6 +164,15 @@ async function run() {
       res.status(200).send(result);
     });
 
+    //article by date fetch api for pie chart
+    app.get("/stats/articles-by-date", async (req, res) => {
+      const result = await articleCollection
+        .aggregate([{ $group: { _id: "$createdAt", count: { $sum: 1 } } }])
+        .toArray();
+
+      res.status(200).send(result);
+    });
+
     //article by user fetch api for bar chart
     app.get("/stats/articles-by-user", async (req, res) => {
       const result = await articleCollection
@@ -189,7 +198,7 @@ async function run() {
             $project: {
               _id: 0,
               email: "$_id",
-              name: "$userInfo.name", 
+              name: "$userInfo.name",
               count: 1,
             },
           },
