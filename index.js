@@ -155,6 +155,50 @@ async function run() {
       res.status(200).send(tickerTexts);
     });
 
+    //article by publisher fetch api for pie chart
+    app.get("/stats/articles-by-publisher", async (req, res) => {
+      const result = await articleCollection
+        .aggregate([{ $group: { _id: "$publisher", count: { $sum: 1 } } }])
+        .toArray();
+
+      res.status(200).send(result);
+    });
+
+    //article by user fetch api for bar chart
+    app.get("/stats/articles-by-user", async (req, res) => {
+      const result = await articleCollection
+        .aggregate([
+          {
+            $group: {
+              _id: "$createdBy", // email
+              count: { $sum: 1 },
+            },
+          },
+          {
+            $lookup: {
+              from: "userCollections", // name of the user collection
+              localField: "_id", // createdBy (email) from article
+              foreignField: "email", // email in user collection
+              as: "userInfo",
+            },
+          },
+          {
+            $unwind: "$userInfo",
+          },
+          {
+            $project: {
+              _id: 0,
+              email: "$_id",
+              name: "$userInfo.name", 
+              count: 1,
+            },
+          },
+        ])
+        .toArray();
+
+      res.status(200).send(result);
+    });
+
     //add publisher
     app.post("/publishers", async (req, res) => {
       const newPublisher = req.body;
