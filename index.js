@@ -5,12 +5,22 @@ const { useInRouterContext } = require("react-router");
 require("dotenv").config();
 const stripe = require("stripe")(process.env.STRIPE_SECRET);
 
+const admin = require("firebase-admin");
+
 const app = express();
 const port = process.env.PORT || 5000;
 
 // Middleware
 app.use(cors());
 app.use(express.json());
+
+//verify token middlewear
+
+const serviceAccount = require("./firebase-adminsdk.json");
+
+admin.initializeApp({
+  credential: admin.credential.cert(serviceAccount),
+});
 
 const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASS}@cluster0.xgjcv8g.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0`;
 const client = new MongoClient(uri, {
@@ -39,10 +49,46 @@ async function run() {
     const publisherCollection = client
       .db("headLinerDB")
       .collection("publisherCollection");
+    const commentsCollection = client
+      .db("headLinerDB")
+      .collection("commentCollection");
+
+    //custom middlewares
+    const verifyToken = async (req, res, next) => {
+      const authHeaders = req.headers.authorization;
+      if (!authHeaders) {
+        return res.status(401).send({ message: "unauthorized access" });
+      }
+
+      const token = authHeaders.split(" ")[1];
+      if (!token) {
+        return res.status(401).send({ message: "unauthorized access" });
+      }
+
+      try {
+        const res = await admin.auth().verifyIdToken(token);
+        req.decoded = res;
+        next();
+      } catch (err) {
+        return res.status(403).send({ message: "forbidden access" });
+      }
+    };
+
+    //usersCOunt
+    app.get("/users/count", async (req, res) => {
+      const count = await usersCollection.countDocuments();
+      res.send(count);
+    });
 
     //all users api
     app.get("/users", async (req, res) => {
-      const users = await usersCollection.find({}).toArray();
+      const page = parseInt(req.query.currentPage) - 1;
+      const size = parseInt(req.query.itemsPerPage);
+      const users = await usersCollection
+        .find({})
+        .skip(page * size)
+        .limit(size)
+        .toArray();
       if (users) {
         res.status(200).send(users);
       }
@@ -62,6 +108,39 @@ async function run() {
       res.status(200).send({ success: true });
     });
 
+    //update user profile
+    app.put("/update-user/:email", async (req, res) => {
+      const { email } = req.params;
+      const updateData = req.body;
+      const result = await usersCollection.updateOne(
+        { email },
+        { $set: updateData }
+      );
+
+      res.send(result);
+    });
+
+    //comment post api
+    app.post("/article/comments", async (req, res) => {
+      const comment = req.body;
+      const result = await commentsCollection.insertOne(comment);
+      console.log(result);
+      res.send(result);
+    });
+
+    //comments fetch api
+    app.get("/article/comments", async (req, res) => {
+      const result = await commentsCollection
+        .find({})
+        .sort({ commentedAt: -1 })
+        .limit(6)
+        .toArray();
+
+      //   console.log(req.headers);
+
+      res.send(result);
+    });
+
     //adding new user to db
     app.post("/users", async (req, res) => {
       const email = req.body.email;
@@ -78,6 +157,9 @@ async function run() {
 
     //get articles with user joined api
     app.get("/articles-with-users", async (req, res) => {
+      const page = parseInt(req.query.currentPage) - 1;
+      const size = parseInt(req.query.itemsPerPage);
+      console.log(page, size);
       const result = await articleCollection
         .aggregate([
           {
@@ -92,8 +174,10 @@ async function run() {
             $unwind: "$articleWithUserInfo",
           },
         ])
+        .skip(page * size)
+        .limit(size)
         .toArray();
-      //   console.dir(result);
+
       if (result) {
         res.status(200).send(result);
       }
@@ -108,15 +192,20 @@ async function run() {
         .toArray();
 
       const user = await usersCollection.findOne({ email: createdBy });
+      const start = new Date(user.premiumTaken);
+      const end = new Date(start.getTime() + user.subscriptionDuration * 1000);
+      const now = new Date();
 
-      if (!user.premiumTaken && existingArticles.length >= 1) {
+      const isValid = now < end;
+
+      if (!isValid && existingArticles.length >= 1) {
         return res.send({
           success: false,
           code: 4099,
           message: "data not inserted",
         });
       }
-      console.log(req.body);
+      //   console.log(req.body);
       //   const newsArticle = ({
       //     title,
       // 	tickerText,
@@ -164,13 +253,83 @@ async function run() {
       res.status(200).send(result);
     });
 
+    //subscription validity checks api
+    app.get("/subscription/status/:email", async (req, res) => {
+      const { email } = req.params;
+      const user = await usersCollection.findOne({ email });
+
+      const start = new Date(user.premiumTaken);
+      const end = new Date(start.getTime() + user.subscriptionDuration * 1000);
+      const now = new Date();
+
+      const isValid = now < end;
+
+      res.status(200).send({
+        valid: isValid,
+        expiresAt: end.toISOString(),
+      });
+    });
+
+    //user subscription status+role fetch api
+    app.get("/user/status/:email", async (req, res) => {
+      const { email } = req.params;
+      const user = await usersCollection.findOne({ email });
+
+      if (!user) {
+        return res.status(404).send({ message: "User Not Found!" });
+      }
+
+      let role = user.role || "user";
+      let valid = false;
+      let expiresAt = null;
+
+      if (user.premiumTaken && user.subscriptionDuration) {
+        const start = new Date(user.premiumTaken);
+        const end = new Date(
+          start.getTime() + user.subscriptionDuration * 1000
+        );
+        const now = new Date();
+
+        valid = now < end;
+        expiresAt = end.toISOString();
+
+        if (valid) {
+          role = "premium";
+        }
+      }
+
+      res.status(200).send({
+        role,
+      });
+    });
+
     //article by date fetch api for pie chart
     app.get("/stats/articles-by-date", async (req, res) => {
       const result = await articleCollection
-        .aggregate([{ $group: { _id: "$createdAt", count: { $sum: 1 } } }])
+        .aggregate([
+          {
+            $group: {
+              _id: {
+                $dateToString: {
+                  format: "%Y-%m-%d",
+                  date: { $toDate: "$createdAt" },
+                },
+              },
+              count: { $sum: 1 },
+            },
+          },
+          {
+            $sort: { _id: 1 }, // Optional: sorts by date ascending
+          },
+        ])
         .toArray();
 
-      res.status(200).send(result);
+      const formatted = result.map((item) => ({
+        date: item._id,
+        count: item.count,
+      }));
+
+      res.status(200).send(formatted);
     });
 
     //article by user fetch api for bar chart
@@ -261,8 +420,13 @@ async function run() {
     });
 
     //myArticle fetch api
-    app.get("/article/my-articles", async (req, res) => {
+    app.get("/article/my-articles", verifyToken, async (req, res) => {
+      //   console.log(req.decoded);
+      const userEmail = req.decoded.email;
       const { email } = req.query;
+      if (userEmail !== email) {
+        return res.status(403).send({ message: "Forbidden" });
+      }
       const result = await articleCollection
         .find({ createdBy: email })
         .toArray();
@@ -276,6 +440,12 @@ async function run() {
       const { id } = req.params;
       const result = await articleCollection.findOne({ _id: new ObjectId(id) });
       res.send(result);
+    });
+
+    //all articles count
+    app.get("/articles/count", async (req, res) => {
+      const count = await articleCollection.countDocuments();
+      res.send(count);
     });
 
     //update article api
@@ -411,9 +581,7 @@ async function run() {
       if (!user) {
         return res.status(404).send({ message: "User Not Found!" });
       }
-      if (user.premiumTaken) {
-        return res.send({ role: "premium" });
-      }
+
       res.send({ role: user.role || "user" });
     });
 
@@ -439,6 +607,15 @@ async function run() {
         normalUsers,
         premiumUsers,
       });
+    });
+
+    //premium article count
+    app.get("/article/premium/count", async (req, res) => {
+      const result = await articleCollection.countDocuments({
+        isPremium: true,
+      });
+
+      res.send(result);
     });
 
     //fetch premium articles api
