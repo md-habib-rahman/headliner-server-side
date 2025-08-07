@@ -245,6 +245,8 @@ async function run() {
       const userEmail = req.decoded.email;
       const { createdBy } = req.body;
 
+      console.log(userEmail, createdBy);
+
       if (userEmail !== createdBy) {
         return res.status(403).send({ message: "unauthorized" });
       }
