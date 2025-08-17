@@ -52,6 +52,9 @@ async function run() {
     const commentsCollection = client
       .db("headLinerDB")
       .collection("commentCollection");
+    const messageCollection = client
+      .db("headLinerDB")
+      .collection("messageCollection");
 
     //custom middlewares
     const verifyToken = async (req, res, next) => {
@@ -83,6 +86,26 @@ async function run() {
       }
       const count = await usersCollection.countDocuments();
       res.send(count);
+    });
+
+    //message post api
+    app.post("/user-message", async (req, res) => {
+      const newMessage = req.body;
+      //   console.log(newMessage)
+      const result = await messageCollection.insertOne(newMessage);
+      res.send(result);
+    });
+
+    //message get api
+    app.get("/user-message", verifyToken, async (req, res) => {
+      const userEmail = req.decoded.email;
+      const isAdmin = verifyIsAdmin(userEmail);
+      if (!isAdmin) {
+        return res.status(403).send({ message: "forbidden" });
+      }
+
+      const result = await messageCollection.find().toArray();
+      res.send(result);
     });
 
     //all users api
