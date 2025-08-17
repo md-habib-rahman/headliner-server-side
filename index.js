@@ -96,6 +96,30 @@ async function run() {
       res.send(result);
     });
 
+    //feature article fetch api
+    app.get("/feature-articles", async (req, res) => {
+      const articles = await articleCollection
+        .aggregate([
+          { $match: { "approvalStatus.isApprove": true } },
+          { $sort: { createdAt: -1 } },
+          { $sample: { size: 7 } },
+        ])
+        .toArray();
+      console.log(articles);
+      res.status(200).send(articles);
+    });
+
+    //recent artiles fetch api
+    app.get("/recent-articles", async (req, res) => {
+      const articles = await articleCollection
+        .find({ "approvalStatus.isApproved": true })
+        .sort({ createdAt: -1 })
+        .limit(4)
+        .toArray();
+
+      res.status(200).send(articles);
+    });
+
     //message get api
     app.get("/user-message", verifyToken, async (req, res) => {
       const userEmail = req.decoded.email;
