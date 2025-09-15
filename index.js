@@ -55,6 +55,9 @@ async function run() {
     const messageCollection = client
       .db("headLinerDB")
       .collection("messageCollection");
+    const spotlightBucket = client
+      .db("headLinerDB")
+      .collection("spotlightBucket");
 
     //custom middlewares
     const verifyToken = async (req, res, next) => {
@@ -105,18 +108,18 @@ async function run() {
           { $sample: { size: 7 } },
         ])
         .toArray();
-      console.log(articles);
+      //   console.log(articles);
       res.status(200).send(articles);
     });
 
     //recent artiles fetch api
     app.get("/recent-articles", async (req, res) => {
       const articles = await articleCollection
-        .find({ "approvalStatus.isApproved": true })
+        .find({ "approvalStatus.isApprove": true })
         .sort({ createdAt: -1 })
         .limit(4)
         .toArray();
-
+    //   console.log("article", articles);
       res.status(200).send(articles);
     });
 
@@ -150,6 +153,21 @@ async function run() {
       if (users) {
         res.status(200).send(users);
       }
+    });
+
+    //spotlight bucket
+    app.get("/spotlight-bucket", verifyToken, async (req, res) => {
+      const bucket = await db.collection("spotlightBucket").findOne({});
+      if (!bucket) return res.send([]);
+
+      
+      const articleIds = bucket.articles.map((id) => new ObjectId(id));
+      const articles = await db
+        .collection("articleCollection")
+        .find({ _id: { $in: articleIds }, "approvalStatus.isApprove": true })
+        .toArray();
+
+      res.json({ ...bucket, articles });
     });
 
     //update user role
@@ -192,7 +210,7 @@ async function run() {
       }
       const comment = req.body;
       const result = await commentsCollection.insertOne(comment);
-      console.log(result);
+      //   console.log(result);
       res.send(result);
     });
 
@@ -263,7 +281,7 @@ async function run() {
       }
       const page = parseInt(req.query.currentPage) - 1;
       const size = parseInt(req.query.itemsPerPage);
-      console.log(page, size);
+      //   console.log(page, size);
       const result = await articleCollection
         .aggregate([
           {
@@ -292,7 +310,7 @@ async function run() {
       const userEmail = req.decoded.email;
       const { createdBy } = req.body;
 
-      console.log(userEmail, createdBy);
+      //   console.log(userEmail, createdBy);
 
       if (userEmail !== createdBy) {
         return res.status(403).send({ message: "unauthorized" });
@@ -303,7 +321,7 @@ async function run() {
         .toArray();
 
       const isValid = await verifyIsPremium(createdBy);
-      console.log(isValid);
+      //   console.log(isValid);
 
       if (!isValid && existingArticles.length >= 1) {
         return res.send({
@@ -330,7 +348,7 @@ async function run() {
 
       const result = await articleCollection.insertOne(newsArticle);
       if (result) {
-        console.log(result);
+        // console.log(result);
         res.status(200).send({ success: true });
       }
     });
@@ -825,7 +843,7 @@ async function run() {
       const userEmail = req.decoded.email;
       const isValid = await verifyIsPremium(userEmail);
       //   const { isPremium } = req.query;
-      console.log(isValid);
+    //   console.log(isValid);
       if (!isValid) {
         return res.status(403).send({ messages: "unauthorized" });
       }
